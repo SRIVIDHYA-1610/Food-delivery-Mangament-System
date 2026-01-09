@@ -25,7 +25,7 @@ import RestaurantProfile from './pages/restaurant/Profile';
 
 function App() {
   return (
-    <Router>
+    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider>
         <CartProvider>
           <SocketProvider>
