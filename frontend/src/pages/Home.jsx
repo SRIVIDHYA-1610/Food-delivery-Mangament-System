@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import RestaurantCard from '../components/RestaurantCard';
-import { Search, Filter } from 'lucide-react';
+import { Search, Filter, Heart } from 'lucide-react';
 
 const Home = () => {
   const [restaurants, setRestaurants] = useState([]);
@@ -9,6 +9,15 @@ const Home = () => {
   const [search, setSearch] = useState('');
   const [selectedCuisine, setSelectedCuisine] = useState('');
   const [sortBy, setSortBy] = useState('');
+  const [showFavorites, setShowFavorites] = useState(false);
+  const [favorites, setFavorites] = useState(() => {
+    try {
+      const raw = localStorage.getItem('favorites');
+      return raw ? JSON.parse(raw) : [];
+    } catch (_) {
+      return [];
+    }
+  });
 
   const cuisines = ['Italian', 'Chinese', 'Indian', 'Mexican', 'Japanese', 'American', 'Thai', 'Mediterranean'];
 
@@ -33,14 +42,27 @@ const Home = () => {
     }
   };
 
+  const toggleFavorite = (id) => {
+    setFavorites((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      localStorage.setItem('favorites', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const displayed = useMemo(() => {
+    if (!showFavorites) return restaurants;
+    return restaurants.filter((r) => favorites.includes(r._id));
+  }, [restaurants, showFavorites, favorites]);
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Hero Section */}
       <div className="text-center mb-12">
-        <h1 className="text-4xl font-bold text-gray-900 mb-4">
+        <h1 className="text-4xl font-bold text-gray-900 mb-4 dark:text-gray-100">
           Order Food from Your Favorite Restaurants
         </h1>
-        <p className="text-xl text-gray-600">
+        <p className="text-xl text-gray-600 dark:text-gray-300">
           Fast delivery • Wide selection • Great prices
         </p>
       </div>
@@ -90,6 +112,16 @@ const Home = () => {
               {cuisine}
             </button>
           ))}
+
+          {/* Favorites toggle */}
+          <button
+            onClick={() => setShowFavorites((v) => !v)}
+            className={`ml-auto px-4 py-2 rounded-full flex items-center gap-2 ${showFavorites ? 'bg-primary-600 text-white' : 'bg-gray-200 text-gray-700'}`}
+            title="Show favorites"
+          >
+            <Heart size={18} />
+            Favorites
+          </button>
         </div>
       </div>
 
@@ -98,14 +130,19 @@ const Home = () => {
         <div className="flex justify-center items-center h-64">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
         </div>
-      ) : restaurants.length === 0 ? (
+      ) : displayed.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-xl text-gray-600">No restaurants found</p>
+          <p className="text-xl text-gray-600 dark:text-gray-300">No restaurants found</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {restaurants.map((restaurant) => (
-            <RestaurantCard key={restaurant._id} restaurant={restaurant} />
+          {displayed.map((restaurant) => (
+            <RestaurantCard
+              key={restaurant._id}
+              restaurant={restaurant}
+              onToggleFavorite={toggleFavorite}
+              isFavorite={favorites.includes(restaurant._id)}
+            />
           ))}
         </div>
       )}

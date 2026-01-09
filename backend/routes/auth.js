@@ -19,9 +19,10 @@ router.post('/register', [
     }
 
     const { name, email, password, phone, role } = req.body;
+    const normalizedEmail = (email || '').toLowerCase().trim();
 
     // Check if user exists
-    let user = await User.findOne({ email });
+    let user = await User.findOne({ email: normalizedEmail });
     if (user) {
       return res.status(400).json({ message: 'User already exists' });
     }
@@ -29,13 +30,20 @@ router.post('/register', [
     // Create new user
     user = new User({
       name,
-      email,
+      email: normalizedEmail,
       password,
       phone,
       role: role || 'user'
     });
 
-    await user.save();
+    try {
+      await user.save();
+    } catch (err) {
+      if (err && err.code === 11000 && (err.keyPattern?.email || err.keyValue?.email)) {
+        return res.status(400).json({ message: 'User already exists' });
+      }
+      throw err;
+    }
 
     // Create JWT token
     const token = jwt.sign(
@@ -71,9 +79,10 @@ router.post('/login', [
     }
 
     const { email, password } = req.body;
+    const normalizedEmail = (email || '').toLowerCase().trim();
 
     // Check if user exists
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: normalizedEmail });
     if (!user) {
       return res.status(400).json({ message: 'Invalid credentials' });
     }

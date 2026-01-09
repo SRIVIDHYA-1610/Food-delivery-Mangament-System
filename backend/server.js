@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 const http = require('http');
 const socketIo = require('socket.io');
 const connectDB = require('./config/database');
+const { RateLimiterMemory } = require('rate-limiter-flexible');
 
 // Load environment variables
 dotenv.config();
@@ -11,17 +12,54 @@ dotenv.config();
 // Initialize express app
 const app = express();
 const server = http.createServer(app);
+
+// Allow multiple client origins
+const allowedOrigins = (process.env.CLIENT_URLS || process.env.CLIENT_URL || 'http://localhost:5173,http://localhost:3000')
+  .split(',')
+  .map(o => o.trim());
+
 const io = socketIo(server, {
   cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:3000',
-    methods: ['GET', 'POST', 'PUT', 'DELETE']
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true); // allow non-browser clients
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error('Not allowed by CORS'));
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: true
   }
 });
 
+// Initialize rate limiter
+const opts = {
+  points: 100, // Number of requests allowed
+  duration: 60, // Per 60 seconds
+};
+const rateLimiter = new RateLimiterMemory(opts);
+
+// Rate limiting middleware
+const rateLimitMiddleware = async (req, res, next) => {
+  try {
+    await rateLimiter.consume(req.ip);
+    next();
+  } catch (rejRes) {
+    res.status(429).send('Too Many Requests');
+  }
+};
+
 // Middleware
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(rateLimitMiddleware); // Apply rate limiting globally
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('Not allowed by CORS'));
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true
+}));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Make io accessible to routes
 app.set('io', io);
@@ -58,11 +96,15 @@ io.on('connection', (socket) => {
   });
 });
 
+// Serve static files from uploads directory
+app.use('/uploads', express.static('uploads'));
+
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/restaurants', require('./routes/restaurants'));
 app.use('/api/menu', require('./routes/menu'));
 app.use('/api/orders', require('./routes/orders'));
+app.use('/api/upload', require('./routes/upload'));
 
 // Health check route
 app.get('/api/health', (req, res) => {
@@ -76,7 +118,7 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

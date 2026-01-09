@@ -23,6 +23,19 @@ const Register = () => {
     e.preventDefault();
     setLoading(true);
 
+    // Client-side validation to avoid avoidable 400s
+    const validationErrors = [];
+    if (!formData.name.trim()) validationErrors.push('Name is required');
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(formData.email)) validationErrors.push('Valid email is required');
+    if (!formData.phone.trim()) validationErrors.push('Phone is required');
+    if ((formData.password || '').length < 6) validationErrors.push('Password must be at least 6 characters');
+
+    if (validationErrors.length) {
+      validationErrors.forEach((m) => toast.error(m));
+      setLoading(false);
+      return;
+    }
+
     try {
       const user = await register(formData);
       toast.success('Registration successful!');
@@ -33,7 +46,9 @@ const Register = () => {
         navigate('/');
       }
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Registration failed');
+      const data = error.response?.data;
+      const message = data?.message || (Array.isArray(data?.errors) && data.errors.length ? data.errors[0]?.msg : null) || 'Registration failed';
+      toast.error(message);
     } finally {
       setLoading(false);
     }

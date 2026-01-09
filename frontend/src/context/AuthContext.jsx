@@ -1,6 +1,9 @@
 import { createContext, useState, useContext, useEffect } from 'react';
 import axios from 'axios';
 
+// Configure axios base URL to match backend port
+axios.defaults.baseURL = 'http://localhost:5000';
+
 const AuthContext = createContext();
 
 export const useAuth = () => {
